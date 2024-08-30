@@ -1,11 +1,39 @@
+######################################
+index the genome
+######################################
+
 #!/bin/bash
 
 #SBATCH -p shared
 #SBATCH -c 100
-#SBATCH --mem=200G
+#SBATCH --mem=150G
 #SBATCH --gres=tmp:400G
 #SBATCH -t 71:59:00
-#SBATCH --mail-user=$USER@sheffield.ac.uk # Email address to sent status report
+#SBATCH --mail-user=gwhirons-alecrim1@sheffield.ac.uk
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+module purge
+
+module load bioinformatics
+
+module load hisat2/2.2.1
+
+
+hisat2-build /nobackup/qkdf72/transcriptomics_new_data/Trimmed/forward_and_reverse_reads/hifiasm_H.moselyanum_out.bp.p_ctg.fa genome
+
+
+######################################
+Read alignment to indexed genome
+######################################
+
+#!/bin/bash
+
+#SBATCH -p shared
+#SBATCH -c 16
+#SBATCH --mem=32G
+#SBATCH --gres=tmp:300G
+#SBATCH -t 40:00:00
+#SBATCH --mail-user=$USER@sheffield.ac.uk # Email address to send status report
 #SBATCH --mail-type=BEGIN,END,FAIL # Types of status update to email
 
 module purge
@@ -16,17 +44,16 @@ module load hisat2/2.2.1
 
 module load samtools/1.16.1
 
-
 # Define input and output directories
 input=/nobackup/qkdf72/transcriptomics_new_data/Trimmed/forward_and_reverse_reads
-output=/nobackup/qkdf72/hisat2/hisat_results
+output=/nobackup/qkdf72/hisat2/hisat_again_results
 
 # Define the HISAT2 index directory
 index_dir=/nobackup/qkdf72/hisat2
 
 # Loop through all forward read files in the input directory
 for i in $input/*_R1.fastq.gz;
-do 
+do
     # Extract filename and base name
     withpath="${i}"
     filename=${withpath##*/}
@@ -34,21 +61,17 @@ do
     sample_name=`echo "${base}" | awk -F "R1.fastq.gz" '{print $1}'`
 
     # Run HISAT2 alignment
-    hisat2 -p 2 -x $index_dir/genome \
+    hisat2 -p 16 -x $index_dir/genome \
            -1 $input/"${base}"*_R1.fastq.gz \
            -2 $input/"${base}"*_R2.fastq.gz \
            -S $output/"${base}".hisat.sam \
-           --summary-file $output/"${base}".txt 
+           --summary-file $output/"${base}".txt
 
     echo "$sample_name HISAT2 alignment done!"
 
-    # Convert SAM to BAM
-    samtools view -@ 2 -m 2G -ub $output/"${base}".hisat.sam -o $output/"${base}".hisat.bam
-    echo "${sample_name} SAM to BAM conversion done!"
+    # Convert SAM to sorted BAM
+    samtools sort -o $output/"${base}".hisat.sorted.bam $output/"${base}".hisat.sam
 
-    # Sort BAM file
-    samtools sort -n -@ 2 -m 2G -T /tmp/ $output/"${base}".hisat.bam -o $output/"${base}".hisat.sorted.bam
-    echo "${sample_name} BAM sorting done!"
-
-    echo "$base processing complete!"
+    echo "$sample_name SAM to BAM conversion and sorting done!"
 done
+
